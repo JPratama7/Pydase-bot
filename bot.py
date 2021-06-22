@@ -37,9 +37,22 @@ def checkbarang(idbarang, ):
            return True
     return False
 
-def idorder():
+def idorder(idbarang,idorang):
     now = datetime.datetime.now()
+    seq = now.strftime("%Y%m%d%H%M")
+    stridorang = str(idorang)
+    stridbarang = str(idbarang)
+    idorder = int(seq+stridorang+stridbarang)
+    return idorder
+    
 
+def isadmin(idtelegram):
+    sql.execute("SELECT tele_id FROM admin WHERE tele_id ='%s'" % (idtelegram))
+    admin = sql.fetchall()
+    if len(admin) == 1:
+        return True
+    else:
+        return False
 
 def log(message,perintah):
     tanggal = datetime.datetime.now()
@@ -92,11 +105,11 @@ def order(message):
             hargabarang = sql.fetchall()
             harga = int(hargabarang[0][0])
             jmlh = int(text[2])
-            kode = randint(0,200)
+            kode = idorder(barang,no_id)
             waktu = datetime.datetime.now()
             total = jmlh*harga
-            insert = "INSERT INTO list_order(id_order,tele_id,barang,jmlh, total, created_at) VALUES (%s,%s,%s,%s,%s,%s)"
-            val = (kode, no_id, barang, jmlh, total, waktu)
+            insert = "INSERT INTO list_order(id_order,tele_id,barang,jmlh, total, created_at, status) VALUES (%s,%s,%s,%s,%s,%s,%s)"
+            val = (kode, no_id, barang, jmlh, total, waktu,"pending")
             sql.execute(insert, val)
             db.commit()
             bot.send_message(no_id, "OK BARANG BERHASIL DIPESAN")
@@ -195,6 +208,59 @@ def cancel(message):
     except IndexError:
         bot.send_message(tele_id, "SALAH FORMAT LAH KAO ato ga LU MAO CANCEL ORDER ORANG LAEN YA")
 
+#handler laporan
+@bot.message_handler(commands="laporan")
+def laporan(message):
+    tele_id = int(message.chat.id)
+    if isadmin(tele_id):
+        sql.execute("SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at, list_order.status FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang")
+        data = sql.fetchall()
+        print(data)
+        for datauser in data:
+            id_order = datauser[0]
+            nama_user = datauser[1]
+            nama_barang = datauser[2]
+            total = datauser[3]
+            jmlah = datauser[4]
+            tanggal = datauser[5]
+            status = str(datauser[6])
+            pesan = "ID ORDER = %s\nNama User = %s\nNama Barang = %s\nTotal Pembelian = %s\nJumlah Pembelian = %s\nTanggal Pemesanan = %s\nStatus = %s\n" % (id_order,nama_user,nama_barang,total,jmlah,tanggal,status)
+            bot.send_message(tele_id,pesan)
+    else:
+        bot.reply_to(message,"LU SAPA ANJER")
+
+#handler verify
+@bot.message_handler(commands="verif")
+def verif(message):
+    tele_id = int(message.chat.id)
+    if isadmin(tele_id):
+        try:
+            text = message.text.split(" ")
+            id_order = text[2]
+            kondisi = text[1]
+            print(kondisi)
+            if kondisi==1:
+                lunas = "UPDATE list_order SET status = '%s' WHERE id_order = %s"
+                val = ("lunas",id_order)
+                bot.send_message(tele_id,"OKEH, DONE")
+
+            if kondisi==0:
+                pending = "UPDATE list_order SET status = '%s' WHERE id_order = %s"
+                val = ("pending",id_order)
+                bot.send_message(tele_id,"OKEH, DONE")
+
+            if kondisi==2:
+                status = "terkirim"
+                sql.execute("UPDATE list_order SET status = %s WHERE id_order = %s" % (status,id_order))
+                bot.send_message(tele_id,"OKEH, DONE")
+            else:
+                bot.send_message(tele_id,"Ndak Paham bos")
+        except IndexError:
+            bot.send_message(tele_id, "Salah Format")
+        except ValueError:
+            bot.send_message(tele_id, "Salah Isi itu oe")
+    else:
+        bot.send_message(tele_id,"SAPA LU ANJER")
 
 print("bot is berlari")
 bot.polling()
