@@ -1,0 +1,3 @@
+PyTelegramBotAPI>=3.7.9
+ConfigParser>=5.0.1
+mysql-connector-python>=8.0.25
