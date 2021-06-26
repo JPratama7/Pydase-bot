@@ -1,8 +1,8 @@
 import telebot
 import mysql.connector
 import configparser
-from random import randint
-import  datetime
+import datetime
+from numba import jit
 
 #configparser
 config = configparser.ConfigParser()
@@ -21,6 +21,7 @@ database = config["db"]["database"]
 db = mysql.connector.connect(user=user, password=password, database=database)
 sql = db.cursor()
 
+@jit(nopython=True)
 def checkuser(telegramid):
     sql.execute("SELECT tele_id FROM user WHERE tele_id ='%s'" % (telegramid))
     user = sql.fetchall()
@@ -29,6 +30,7 @@ def checkuser(telegramid):
     else:
         return False
 
+@jit(nopython=True)
 def checkbarang(idbarang, ):
     barang_id = int(idbarang)
     sql.execute("SELECT id_barang FROM barang WHERE id_barang ='%s'" % (barang_id))
@@ -37,6 +39,7 @@ def checkbarang(idbarang, ):
            return True
     return False
 
+@jit(nopython=True)
 def idorder(idbarang,idorang):
     now = datetime.datetime.now()
     seq = now.strftime("%Y%m%d%H%M")
@@ -45,7 +48,7 @@ def idorder(idbarang,idorang):
     idorder = int(seq+stridorang+stridbarang)
     return idorder
     
-
+@jit(nopython=True)
 def isadmin(idtelegram):
     sql.execute("SELECT tele_id FROM admin WHERE tele_id ='%s'" % (idtelegram))
     admin = sql.fetchall()
@@ -124,6 +127,7 @@ def order(message):
 
 
 #Handler Perintah list
+@jit(nopython=True)
 @bot.message_handler(commands=["list"])
 def product_list(message):
     log(message,'lisr')
@@ -239,17 +243,17 @@ def verif(message):
             id_order = text[2]
             kondisi = text[1]
             print(kondisi)
-            if kondisi==1:
+            if kondisi == 1:
                 lunas = "UPDATE list_order SET status = '%s' WHERE id_order = %s"
                 val = ("lunas",id_order)
                 bot.send_message(tele_id,"OKEH, DONE")
 
-            if kondisi==0:
+            if kondisi == 0:
                 pending = "UPDATE list_order SET status = '%s' WHERE id_order = %s"
                 val = ("pending",id_order)
                 bot.send_message(tele_id,"OKEH, DONE")
 
-            if kondisi==2:
+            if kondisi == 2:
                 status = "terkirim"
                 sql.execute("UPDATE list_order SET status = %s WHERE id_order = %s" % (status,id_order))
                 bot.send_message(tele_id,"OKEH, DONE")
