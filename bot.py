@@ -1,3 +1,5 @@
+import random
+
 import telebot
 import mysql.connector
 import configparser
@@ -17,8 +19,12 @@ password = ""
 database = config["db"]["database"]
 
 #Setting SQL
-db = mysql.connector.connect(user=user, password=password, database=database)
-sql = db.cursor()
+try:
+    db = mysql.connector.connect(user=user, password=password, database=database, autocommit=True)
+    sql = db.cursor()
+except:
+    with open("logbot.txt", "a") as log:
+        log.write("DB ERROR")
 
 
 def checkuser(telegramid):
@@ -53,13 +59,14 @@ def isadmin(idtelegram):
     else:
         return False
     
-def log(message,perintah):
+def log(message):
+    perintah = message.text
     tanggal = datetime.datetime.now()
     tanggal = tanggal.strftime('%d-%B-%Y')
     nama_awal = message.chat.first_name
     nama_akhir = message.chat.last_name
     id_user = message.chat.id
-    text_log = '{}, {}, {} {}, {} \n'.format(tanggal, id_user, nama_awal, nama_akhir, perintah)
+    text_log = f"{tanggal}, {id_user}, {nama_awal}, {nama_akhir}, {perintah}"
     log_bot = open('logbot.txt','a')
     log_bot.write(text_log)
     log_bot.close()
@@ -67,28 +74,19 @@ def log(message,perintah):
 # welcome message handler
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
+    log(message)
     bot.reply_to(message, "  Halo Selamat Datang. Silahkan ketik /help untuk menemukan perintah")
 
 # @bot.message_handler(
-#     func=lambda message: message.text is not None and "zayank" in message.text
+#     func=lambda message: message.text is not None
 # )
 # def message_list(message):
-#     chat_id = message.from_user.id
-#     text = message.text.split(" ")
-#     perintah = text[1]
-#     if perintah == "order":
-#         order(message)
-#     if perintah == "list":
-#         product_list(message)
-#     if perintah == "daftar":
-#         daftar(message)
-#     else:
-#         bot.send_message(chat_id, "RA NGERTI BROW")
+#     bot.reply_to(message, "Tolong Ikuti Perintah")
 
 #Handler Perintah order
 @bot.message_handler(commands=["order"])
 def order(message):
-    log(message,'Order')
+    log(message)
     no_id = int(message.chat.id)
     if checkuser(no_id):
         bot.send_message(no_id, "ANDA TERDAFTAR, OK LANJUT")
@@ -97,21 +95,20 @@ def order(message):
             text = message.text.split(" ")
             barang = int(text[1])
             if checkbarang(barang):
-                pass
+                sql.execute(f"SELECT harga FROM barang WHERE id_barang ={barang}")
+                hargabarang = sql.fetchall()
+                harga = int(hargabarang[0][0])
+                jmlh = int(text[2])
+                kode = idorder(barang,no_id)
+                waktu = datetime.datetime.now()
+                total = jmlh*harga
+                insert = "INSERT INTO list_order(id_order,tele_id,barang,jmlh, total, created_at, status) VALUES (%s,%s,%s,%s,%s,%s,%s)"
+                val = (kode, no_id, barang, jmlh, total, waktu,"pending")
+                sql.execute(insert, val)
+                db.commit()
+                bot.send_message(no_id, "OK BARANG BERHASIL DIPESAN")
             else:
-                bot.send_message(no_id,"Barang tidak tersedia")
-            sql.execute("SELECT harga FROM barang WHERE id_barang ='%s'" % (barang))
-            hargabarang = sql.fetchall()
-            harga = int(hargabarang[0][0])
-            jmlh = int(text[2])
-            kode = idorder(barang,no_id)
-            waktu = datetime.datetime.now()
-            total = jmlh*harga
-            insert = "INSERT INTO list_order(id_order,tele_id,barang,jmlh, total, created_at, status) VALUES (%s,%s,%s,%s,%s,%s,%s)"
-            val = (kode, no_id, barang, jmlh, total, waktu,"pending")
-            sql.execute(insert, val)
-            db.commit()
-            bot.send_message(no_id, "OK BARANG BERHASIL DIPESAN")
+                bot.send_message(no_id, "Barang tidak tersedia")
         except IndexError:
             bot.send_message(no_id, "FORMAT SALAH")
         except ValueError:
@@ -125,7 +122,7 @@ def order(message):
 #Handler Perintah list
 @bot.message_handler(commands=["list"])
 def product_list(message):
-    log(message,'lisr')
+    log(message)
     chat_id = message.chat.id
     sql.execute("SELECT id_barang, nama, harga FROM barang")
     barang = sql.fetchall()
@@ -137,9 +134,9 @@ def product_list(message):
         bot.send_message(chat_id, pesan)
     
 #Handler Perintah daftar
-@bot.message_handler(commands=["daftar,"])
+@bot.message_handler(commands=["daftar"])
 def daftar(message):
-    log(message,'daftar')
+    log(message)
     chat_id = message.chat.id
     if checkuser(chat_id):
         bot.send_message(chat_id,"BLOK KAN LU DAH DAFTAR")
@@ -160,6 +157,7 @@ def daftar(message):
 #handler help
 @bot.message_handler(commands=["help"])
 def help(message):
+    log(message)
     bot.reply_to(message,"SELAMAT DATANG KE BOT KAMI\n\n"
                          "Untuk melakukan pendaftaran silakan ketik sesuai format /daftar, nama, alamat\n\n"
                          "Untuk mengecek list kode barang barang silakan ketik /list\n\n"
@@ -169,6 +167,7 @@ def help(message):
 #handler  orderlist
 @bot.message_handler(commands=["orderlist"])
 def orderlist(message):
+    log(message)
     tele_id = int(message.chat.id)
     sql.execute("SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang WHERE list_order.tele_id = %s" % (tele_id))
     data = sql.fetchall()
@@ -186,6 +185,7 @@ def orderlist(message):
 #handler  cancel
 @bot.message_handler(commands=["cancel"])
 def cancel(message):
+    log(message)
     tele_id = int(message.chat.id)
     try:
         text = str(message.text)
@@ -205,25 +205,29 @@ def cancel(message):
         bot.send_message(tele_id, pesan)
         sql.execute(f"DELETE FROM list_order WHERE id_order = {id_cancel} AND tele_id = {tele_id}")
     except IndexError:
-        bot.send_message(tele_id, "SALAH FORMAT LAH KAO ato ga LU MAO CANCEL ORDER ORANG LAEN YA")
+        bot.send_message(tele_id, "Hayolow Mau ngapain :|")
     
 #handler laporan
 @bot.message_handler(commands="laporan")
 def laporan(message):
+    log(message)
     tele_id = int(message.chat.id)
+    text = message.text.split(" ")
+    tanggal = text[1]
+    gabungan = f"{tanggal} 00:00"
     if isadmin(tele_id):
-        sql.execute("SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at, list_order.status FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang")
+        sql.execute(f"SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at, list_order.status FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang WHERE list_order.created_at > '{gabungan}' ")
         data = sql.fetchall()
         if data != 0:
             for datauser in data:
-                id_order = datauser[0]
+                id_order = int(datauser[0])
                 nama_user = datauser[1]
                 nama_barang = datauser[2]
                 total = datauser[3]
                 jmlah = datauser[4]
                 tanggal = datauser[5]
                 status = str(datauser[6])
-                pesan = "ID ORDER = %s\nNama User = %s\nNama Barang = %s\nTotal Pembelian = %s\nJumlah Pembelian = %s\nTanggal Pemesanan = %s\nStatus = %s\n" % (id_order,nama_user,nama_barang,total,jmlah,tanggal,status)
+                pesan = f"ID ORDER = {id_order}\nNama User = {nama_user}\nNama Barang = {nama_barang}\nTotal Pembelian = {total}\nJumlah Pembelian = {jmlah}\nTanggal Pemesanan = {tanggal}\nStatus = {status}\n"
                 bot.send_message(tele_id,pesan)
         else:
             bot.send_message(tele_id, "belum ada pesanan")
@@ -233,23 +237,25 @@ def laporan(message):
 #handler verify
 @bot.message_handler(commands="verif")
 def verif(message):
+    log(message)
     tele_id = int(message.chat.id)
     if isadmin(tele_id):
         try:
             text = message.text.split(" ")
-            id_order = text[2]
-            kondisi = int(text[1])
-            check = sql.execute(f"SELECT id_order FROM list_order WHERE id_order={id_order}")
+            id_order = int(text[1])
+            kondisi = str(text[2]).lower()
+            sql.execute(f"SELECT * FROM list_order WHERE id_order={id_order}")
+            check = sql.fetchall()
             if check != None:
-                if kondisi == 1:
-                    lunas = f"UPDATE list_order SET status = 'lunas' WHERE id_order = {id_order}"
+                if kondisi == "lunas":
+                    sql.execute(f"UPDATE list_order SET status = 'lunas' WHERE id_order = {id_order}")
                     bot.send_message(tele_id,"OKEH, DONE")
 
-                if kondisi == 0:
-                    pending = f"UPDATE list_order SET status = 'pending' WHERE id_order = {id_order}"
+                elif kondisi == "pending":
+                    sql.execute(f"UPDATE list_order SET status = 'pending' WHERE id_order = {id_order}")
                     bot.send_message(tele_id,"OKEH, DONE")
 
-                if kondisi == 2:
+                elif kondisi == "terkirim":
                     sql.execute(f"UPDATE list_order SET status = 'terkirim' WHERE id_order = {tele_id}")
                     bot.send_message(tele_id,"OKEH, DONE")
                 else:
@@ -265,16 +271,31 @@ def verif(message):
     
 @bot.message_handler(content_types=['photo'])
 def image(message):
-    print(message.caption)
-    print ('message.photo =', message.photo)
+    tele_id = message.chat.id
     fileID = message.photo[-1].file_id
-    print ('fileID =', fileID)
-    file_info = bot.get_file(fileID)
-    print ('file.file_path =', file_info.file_path)
-    downloaded_file = bot.download_file(file_info.file_path)
+    fileInfo = bot.get_file(fileID)
+    downloaded_file = bot.download_file(fileInfo.file_path)
+    try:
+        text = str(message.caption).lower()
+        pesan = text.split(" ")
+        if pesan[0] == "pembayaran":
+            query = f"(INSERT INTO pembayaran VALUES({tele_id},{downloaded_file})"
+            sql.execute(query)
+            bot.send_message(tele_id,"Done Uploaded")
+        else:
+            bot.send_message(tele_id,"OK :|")
+    except ValueError:
+        bot.send_message(tele_id, "Isi Captionya pack :|")
 
-    with open("image.jpg", 'wb') as new_file:
-        new_file.write(downloaded_file)
+@bot.message_handler(commands=["foto"])
+def photo(message):
+    tele_id = message.chat.id
+    sql.execute(f"SELECT * FROM pembayaran")
+    data = sql.fetchall()
+    for datauser in data:
+        id_pembayaran = datauser[0]
+        gambar = datauser[1]
+        bot.send_photo(tele_id,gambar,id_pembayaran)
 
 print("bot is berlari")
 bot.polling()
