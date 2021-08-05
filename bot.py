@@ -193,17 +193,14 @@ def cancel(message):
         id_cancel = split[1]
         sql.execute("SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang WHERE list_order.tele_id = %s AND list_order.id_order = %s" % (tele_id, id_cancel))
         data = sql.fetchall()
-        datauser = data[0]
-        id_order = datauser[0]
-        nama_user = datauser[1]
-        nama_barang = datauser[2]
-        total = datauser[3]
-        jmlah = datauser[4]
-        tanggal = datauser[5]
-        pesan = "ID ORDER = %s\nNama User = %s\nNama Barang = %s\nTotal Pembelian = %s\nJumlah Pembelian = %s\nTanggal Pemesanan = %s\n" % (
-        id_order, nama_user, nama_barang, total, jmlah, tanggal)
-        bot.send_message(tele_id, pesan)
-        sql.execute(f"DELETE FROM list_order WHERE id_order = {id_cancel} AND tele_id = {tele_id}")
+        if len(data) != 0:
+            for datauser in data:
+                id_order, nama_user, nama_barang, total, jmlah,tanggal = datauser
+                pesan = f"ID ORDER = {id_order}\nNama User = {nama_user}\nNama Barang = {nama_barang}\nTotal Pembelian = {total}\nJumlah Pembelian = {jmlah}\nTanggal Pemesanan = {tanggal}\nPesanan berhasil di batalkan"
+                bot.send_message(tele_id, pesan)
+                sql.execute(f"DELETE FROM list_order WHERE id_order = {id_cancel} AND tele_id = {tele_id}")
+        else:
+            bot.send_message(tele_id, "data tidak ditemukan")
     except IndexError:
         bot.send_message(tele_id, "Hayolow Mau ngapain :|")
     
@@ -220,13 +217,7 @@ def laporan(message):
         data = sql.fetchall()
         if data != 0:
             for datauser in data:
-                id_order = int(datauser[0])
-                nama_user = datauser[1]
-                nama_barang = datauser[2]
-                total = datauser[3]
-                jmlah = datauser[4]
-                tanggal = datauser[5]
-                status = str(datauser[6])
+                id_order, nama_user, nama_barang,total,jmlah,tanggal,status = datauser
                 pesan = f"ID ORDER = {id_order}\nNama User = {nama_user}\nNama Barang = {nama_barang}\nTotal Pembelian = {total}\nJumlah Pembelian = {jmlah}\nTanggal Pemesanan = {tanggal}\nStatus = {status}\n"
                 bot.send_message(tele_id,pesan)
         else:
