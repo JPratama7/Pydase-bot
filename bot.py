@@ -1,5 +1,3 @@
-import random
-
 import telebot
 import mysql.connector
 import configparser
@@ -58,7 +56,7 @@ def isadmin(idtelegram):
         return True
     else:
         return False
-    
+
 def log(message):
     perintah = message.text
     tanggal = datetime.datetime.now()
@@ -127,10 +125,8 @@ def product_list(message):
     sql.execute("SELECT id_barang, nama, harga FROM barang")
     barang = sql.fetchall()
     for x in barang:
-        id_barang = x[0]
-        nama = x[1]
-        harga = x[2]
-        pesan = "ID BARANG : %s\nNAMA BARANG : %s\nHARGA BARANG : Rp.%s\n" % (id_barang, nama, harga)
+        id_barang,nama,harga=x
+        pesan = f"ID BARANG : {id_barang}\nNAMA BARANG : {nama}\nHARGA BARANG : Rp.{harga}\n"
         bot.send_message(chat_id, pesan)
     
 #Handler Perintah daftar
@@ -171,15 +167,13 @@ def orderlist(message):
     tele_id = int(message.chat.id)
     sql.execute("SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang WHERE list_order.tele_id = %s" % (tele_id))
     data = sql.fetchall()
-    for datauser in data:
-        id_order = datauser[0]
-        nama_user = datauser[1]
-        nama_barang = datauser[2]
-        total = datauser[3]
-        jmlah = datauser[4]
-        tanggal = datauser[5]
-        pesan = "ID ORDER = %s\nNama User = %s\nNama Barang = %s\nTotal Pembelian = %s\nJumlah Pembelian = %s\nTanggal Pemesanan = %s\n" % (id_order,nama_user,nama_barang,total,jmlah,tanggal)
-        bot.send_message(tele_id,pesan)
+    if len(data) != 0:
+        for datauser in data:
+            id_order, nama_user,nama_barang,total,jmlah,tanggal = datauser
+            pesan = "ID ORDER = %s\nNama User = %s\nNama Barang = %s\nTotal Pembelian = %s\nJumlah Pembelian = %s\nTanggal Pemesanan = %s\n" % (id_order,nama_user,nama_barang,total,jmlah,tanggal)
+            bot.send_message(tele_id,pesan)
+    else:
+        bot.send_message(tele_id,"belum melakukan pesanan")
     
 
 #handler  cancel
@@ -210,20 +204,32 @@ def laporan(message):
     log(message)
     tele_id = int(message.chat.id)
     text = message.text.split(" ")
-    tanggal = text[1]
-    gabungan = f"{tanggal} 00:00"
-    if isadmin(tele_id):
-        sql.execute(f"SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at, list_order.status FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang WHERE list_order.created_at > '{gabungan}' ")
-        data = sql.fetchall()
-        if data != 0:
-            for datauser in data:
-                id_order, nama_user, nama_barang,total,jmlah,tanggal,status = datauser
-                pesan = f"ID ORDER = {id_order}\nNama User = {nama_user}\nNama Barang = {nama_barang}\nTotal Pembelian = {total}\nJumlah Pembelian = {jmlah}\nTanggal Pemesanan = {tanggal}\nStatus = {status}\n"
-                bot.send_message(tele_id,pesan)
+    try:
+        if isadmin(tele_id):
+            if text[1] in ["pending", "lunas", "terkirim"]:
+                payload = f"WHERE status = '{text[1]}'"
+                print(payload)
+            elif bool((datetime.datetime.strptime(text[1], '%Y-%M-%d'))):
+                tanggal = text[1]
+                gabungan = f"{tanggal} 00:00"
+                payload = f"WHERE list_order.created_at > '{gabungan}'"
+            else:
+                bot.send_message(tele_id, "Isi Sesuai Format")
+
+            query = f"SELECT list_order.id_order,user.nama,barang.nama,list_order.total,list_order.jmlh,list_order.created_at, list_order.status FROM list_order INNER JOIN user ON list_order.tele_id = user.tele_id INNER JOIN barang ON list_order.barang = barang.id_barang {payload}"
+            sql.execute(query)
+            data = sql.fetchall()
+            if len(data) != 0:
+                for datauser in data:
+                    id_order, nama_user, nama_barang,total,jmlah,tanggal,status = datauser
+                    pesan = f"ID ORDER = {id_order}\nNama User = {nama_user}\nNama Barang = {nama_barang}\nTotal Pembelian = {total}\nJumlah Pembelian = {jmlah}\nTanggal Pemesanan = {tanggal}\nStatus = {status}\n"
+                    bot.send_message(tele_id,pesan)
+            else:
+                bot.send_message(tele_id, "belum ada pesanan")
         else:
-            bot.send_message(tele_id, "belum ada pesanan")
-    else:
-        bot.reply_to(message,"Not Authorize")
+            bot.reply_to(message,"Not Authorize")
+    except IndexError:
+        bot.send_message(tele_id,"isi sesuai format")
     
 #handler verify
 @bot.message_handler(commands="verif")
@@ -237,7 +243,7 @@ def verif(message):
             kondisi = str(text[2]).lower()
             sql.execute(f"SELECT * FROM list_order WHERE id_order={id_order}")
             check = sql.fetchall()
-            if check != None:
+            if len(check) != 0:
                 if kondisi == "lunas":
                     sql.execute(f"UPDATE list_order SET status = 'lunas' WHERE id_order = {id_order}")
                     bot.send_message(tele_id,"OKEH, DONE")
@@ -284,8 +290,7 @@ def photo(message):
     sql.execute(f"SELECT * FROM pembayaran")
     data = sql.fetchall()
     for datauser in data:
-        id_pembayaran = datauser[0]
-        gambar = datauser[1]
+        id_pembayaran, gambar = datauser
         bot.send_photo(tele_id,gambar,id_pembayaran)
 
 print("bot is berlari")
