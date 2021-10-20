@@ -1,0 +1,10 @@
+.vscode/*
+bin/*
+include/*
+lib/*
+lib64/*
+share/*
+setting.ini
+logbot.text
+pyvenv.cfg
+pydase/*
